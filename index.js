@@ -1,3 +1,7 @@
+//api for finding jobs using certain keywords and send remider notification 
+// version 2.0
+//author: JITHIN BINOY
+
 require("dotenv").config();
 const cors = require("cors");
 const express = require("express");
