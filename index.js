@@ -1,4 +1,4 @@
-//api for finding jobs using certain keywords and send remider notification 
+//api for finding jobs using certain keywords and send reminder notification
 // version 2.0
 //author: JITHIN BINOY
 
@@ -16,7 +16,7 @@ const app = express();
 app.use(cors());
 app.use(express.json());
 
-const port = process.env.PORT;
+const port = process.env.PORT || 3000;
 const webUrl = process.env.WEBURL;
 let jobs = [];
 let previousjob = [];
@@ -24,8 +24,8 @@ let previousjob = [];
 const transporter = nodemailer.createTransport({
   service: "gmail",
   auth: {
-    user: process.env.email,
-    pass: process.env.pass
+    user: process.env.EMAIL,
+    pass: process.env.PASS
   }
 });
 
@@ -158,61 +158,58 @@ const generateEmailHtml = (jobs) => {
 const getWebContent = async () => {
   const getWebContentResponse = await axiosInstance.get(webUrl);
   const { document } = new JSDOM(getWebContentResponse.data).window;
-  jobs.length = 0; // Clear the jobs array
-  previousjob.length = 0; // Clear the previousjob array
 
-  document.querySelectorAll(".company-list").forEach((element) => {
-    const titleElement = element.querySelector("a").textContent.toLowerCase(); //get job title
-    const nameElement = element.querySelector(".joblist .jobs-comp-name").textContent; //get company name
-    const linkElement = element.querySelector(".jobs-comp-name a").getAttribute("href"); //get apply link
+  let newJobs = []; // Store new jobs found in this run
+
+  document.querySelectorAll(".company-list").forEach(element => {
+    const titleElement = element.querySelector("a").textContent.toLowerCase(); // get job title
+    const nameElement = element.querySelector(".joblist .jobs-comp-name").textContent; // get company name
+    const linkElement = element.querySelector(".jobs-comp-name a").getAttribute("href"); // get apply link
+
     if (titleElement && nameElement && linkElement) {
-      const keywords = ["intern", "web", "react", "node", "angular", "mearn", "mean"]; //keyword to check
-      const filterjobs = keywords.some(keyword => titleElement.includes(keyword));  //filter jobs by keyword
+      const keywords = ["intern", "web", "react", "node", "angular", "mearn", "mean"]; // keywords to check
+      const filterjobs = keywords.some(keyword => titleElement.includes(keyword)); // filter jobs by keyword
+
       if (filterjobs) {
-        if (!previousjob.some(job => job.title === titleElement)) {  //checking existing jobtitiles
-          const newJob = ({
+        if (!previousjob.some(job => job.title === titleElement && job.name === nameElement)) { // checking existing job titles
+          const newJob = {
             title: titleElement,
             name: nameElement,
             link: linkElement,
-          });
+          };
           jobs.push(newJob);
-          previousjob.push(newJob);
+          newJobs.push(newJob); // Add to new jobs for this run
+          previousjob.push(newJob); // Add to previous jobs to prevent future duplicates
         }
       }
     }
   });
-  console.log(jobs);
-  return jobs;
+
+  if (newJobs.length > 0) {
+    await sendEmail(newJobs);
+    console.log("Email sent with new jobs");
+  } else {
+    console.log("No new jobs found");
+  }
+
+  return newJobs;
 };
 
-const sendEmail = async () => {
-  const emailHtml = generateEmailHtml(jobs);
+const sendEmail = async (newJobs) => {
+  const emailHtml = generateEmailHtml(newJobs);
   const mailOption = {
-    from: process.env.email,
-    to: "jithinbinoyp@gmail.com",
-    subject: "Job",
+    from: process.env.EMAIL,
+    to: "jithinbinoyp@gmail.com",//allenjohnmonapallil@gmail.com,
+    subject: "Find new Jobs @ Infopark",
     html: emailHtml
   };
 
   await transporter.sendMail(mailOption);
 };
 
-cron.schedule("0 */6 * * *", async () => {
+cron.schedule("*/1 * * * *", async () => {
   await getWebContent();
-  if (jobs.length > 0) {
-    await sendEmail();
-    console.log("Email sent");
-  }
 });
-
-// cron.schedule("* * * * *", async () => {
-//   if (jobs.length > 0) {
-//     await sendEmail();
-//     console.log("Email sent");
-//   } else {
-//     console.log("No jobs available");
-//   }
-// });
 
 const axiosInstance = axios.create({
   httpsAgent: new https.Agent({
